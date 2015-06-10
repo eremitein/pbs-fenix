@@ -1,4 +1,4 @@
 Bash-scripts for simple-primitive but as 
-possible flexible package and building system. 
+possible flexible package and building system (PBS).
 
-Used in Phoenix GNU/Linux.
+Using in Phoenix GNU/Linux.
