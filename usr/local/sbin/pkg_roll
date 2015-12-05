@@ -1,0 +1,51 @@
+#!/bin/bash
+e='echo -e'
+b=`basename $0`
+ROOT_DIR=${ROOT_DIR:-/}
+
+fail_exit() {
+  $e "$1"
+  exit 1
+}
+
+if [ -r /etc/pkgman.conf ]; then
+  . /etc/pkgman.conf
+else
+  fail_exit "${b}:  configuration file /etc/pkgman.conf not readable, exit!"
+fi
+
+if [ ! $1 ]; then
+  $e "\033[1;33mUsage:\033[0;0m $b PKGINFILE [&]
+
+where,
+  PKGINFILE = file with list of installed files in form \"find .\"
+              (e.g. installed with \"pkg_in\")
+  & = set to background mode
+  [TODO]
+  - = send content to stdout (usefully with netcat).
+
+Allow variable:
+  PKG_R = directory to store \"rolled\" packages (default $PKG_R)
+  ROOT_DIR = target directory with installed files (default is \"$ROOT_DIR\")
+
+-----------------------------------------
+Simple packages roller for (B)LFS systems
+* $b provided without implied warranty"
+  exit 1
+fi
+
+if [ ! -r "$PKG_R" ] ; then
+  mkdir -p "$PKG_R" || fail_exit \
+   "${b}:  no access for creating directory \"$PKG_R\", exit!"
+elif [ ! -w "$PKG_R" ] ; then
+  fail_exit "${b}:  no write access for output directory \"$PKG_R\", exit!"
+fi  
+
+for p in "$@" ; do
+	L=`basename "$p"`
+	cd "$ROOT_DIR"
+  $e -n "${b}:  creating $PKG_R/${L}.pkg.txz ..."
+  tar cfJ $PKG_R/${L}.pkg.txz --ignore-failed-read --no-recursion -T "$p" \
+    &>/dev/null || fail_exit "\n${b}:  tar failed, exit!"
+  $e "\033[1;32m done\033[0;0m"
+done

@@ -1,0 +1,130 @@
+#!/bin/bash
+#set -e
+e='echo -e'
+b=`basename $0`
+
+if [ ! $1 ]; then
+  $e "\033[1;33mUsage:\033[0;0m $b buildfile [buildfile2...] [&]
+
+where,
+  buildfile = file(s) with \"pbs\"-specific build instructions
+              (e.g. bash-4.3#b0 or bash-4.3#b)
+  & = set to background mode
+
+-----------------------------------------------
+[P]ackage [B]uild [S]ystem for (B)LFS GNU/Linux
+* $b provided without implied warranty"
+  exit
+fi
+
+global_init() {
+# base initial for $PKG_?
+if [ -r /etc/pkgman.conf ]; then
+  . /etc/pkgman.conf
+else
+  $e "${b}:  configuration file /etc/pkgman.conf not readable, exit!"
+  exit 1
+fi
+
+# reinit for $PKG_
+PKG_A=${PKG_A:-i686}
+PKG_I=${PKG_I:-/var/pkg/in}
+PKG_O=${PKG_O:-/var/pkg/out}
+PKG_C=${PKG_C:-/var/pkg/cache}
+
+# base initial to buildfile
+sD=${sD:-`pwd`}
+rD=${rD:-/ram}
+
+fail() {
+  $e "${b}:  arghhhh! $1 failed, exit!"
+  exit 1
+}
+_cleansrc() {
+  rm -rf $rD/${PN}{,-build}
+}
+_unpack() {
+  tar xf $sD/${PN}*.tar.* -C $rD ||fail unpack
+}
+_cdsrc() {
+  cd $rD/$PN ||fail cdsrc
+  D=`pwd`/PKG
+  echo "[ `date "+%F %T"` ]"
+}
+_patch() {
+  echo "place here patches, sed etc"
+}
+_conf() {
+  ./configure --prefix=/usr ||fail configure-std
+}
+_build() {
+  make ||fail make-std
+}
+_check() {
+  make -k check
+}
+_install() {
+  make install ||fail install-std
+}
+_destin() {
+  make DESTDIR=$D install ||fail destin-std
+}
+_doc() {
+  mkdir -pv $D/usr/share/doc/$PN
+  cp -rv "$@" $D/usr/share/doc/$PN
+}
+_postin() {
+  echo "place here postinstall procedures"
+}
+_cleanpkg() {
+  cd $D ||fail cleanpkg
+  pkg_clean
+}
+_checkin() {
+  cd $D ; find . |sort > $PKG_I/${PN}-${PKG_A} ||fail checkin-std
+  cp -fav --remove-destination * /
+  if [ -r $PKG_I/${PN}-${PKG_A}.in ]; then
+    pushd / &>/dev/null
+    sh $PKG_I/${PN}-${PKG_A}.in
+    popd &>/dev/null
+  fi
+}
+_makepkg() {
+  cd $D
+  pkg_make $PN
+}
+}
+
+# reinit from buildfile(s)
+for bf in "$@" ; do
+  if [ -r "$bf" ]; then
+    global_init
+    PN=`basename "$bf" | cut -d"#" -f1`
+    #funclist=`declare -F | awk '{ printf $3 "\n" }'`
+    case `basename "$bf" | cut -d"#" -f2` in
+      b) funclist="_cleansrc _unpack _cdsrc _patch _conf _build \
+_check _destin _postin _cleanpkg _checkin _makepkg"
+        s_log="1" ;;
+      b?) funclist="_cleansrc _unpack _cdsrc _patch _conf _build \
+_check _install _postin" ;;
+    esac
+    #loading buildfile
+    . "$bf"
+
+    time (
+    cat "$bf"
+    $e
+    for comm in $funclist; do
+      if [[ `declare -f $comm` ]]; then
+        $e $comm":"
+        $comm
+      fi
+    done
+    ) &> ${bf}.log
+    xz -f ${bf}.log
+    #if [ $s_log ]; then cp -v ${bf}.log.xz $PKG_I/${PN}.log.xz ; fi
+    if [[ `declare -f _cleansrc` ]]; then _cleansrc ; fi
+  else
+    $e "${b}:  buildfile \"$bf\" not readable, skip"
+  fi
+done

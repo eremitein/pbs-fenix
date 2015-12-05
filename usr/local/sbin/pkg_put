@@ -1,0 +1,56 @@
+#!/bin/bash
+e='echo -e'
+b=`basename $0`
+ROOT_DIR=${ROOT_DIR:-/}
+
+fail_exit() {
+  $e "$1"
+  exit 1
+}
+
+if [ -r /etc/pkgman.conf ]; then
+  . /etc/pkgman.conf
+else
+  fail_exit "${b}:  configuration file /etc/pkgman.conf not readable, exit!"
+fi
+
+TRGT="${ROOT_DIR}${PKG_I}"
+
+if [ ! $1 ]; then
+  $e "\033[1;33mUsage:\033[0;0m $b PKGNAME [&]
+
+where,
+  PKGNAME = package name and version (example \"bash-4.3\")
+  & = set to background mode
+
+  Usage $b in directory with package's files (e.g.
+  installed after \"make install DESTDIR=\`pwd\`/PKG\")
+
+Allow variables:
+  ROOT_DIR = target directory for installing files (default is \"$ROOT_DIR\")
+  PKG_I = directory, where storing installed package's info (default \"$PKG_I\")
+  PKG_A = architecture suffix (default \"$PKG_A\")
+
+----------------------------------------------------
+Simple package's files transfer for (B)LFS GNU/Linux
+* $b provided without implied warranty"
+  exit 1
+fi
+
+if [ ! -r "$TRGT" ] ; then
+  mkdir -p "$TRGT" || fail_exit \
+   "${b}:  no access for creating directory \"$TRGT\", exit!"
+elif [ ! -w "$TRGT" ] ; then
+  fail_exit "${b}:  no write access for output directory \"$TRGT\", exit!"
+fi
+
+$e -n "${b}:  copying package's files to ${ROOT_DIR} ..."
+find . |sort > $TRGT/${1}-${PKG_A} ||fail checkin-std
+cp -fa --remove-destination * ${ROOT_DIR} 2>/dev/null || fail_exit \
+  "${b}:  copying failed, exit!"
+if [ -r $TRGT/${1}-${PKG_A}.in ]; then
+  pushd / &>/dev/null
+  sh $TRGT/${1}-${PKG_A}.in
+  popd &>/dev/null
+fi
+$e "\033[1;32m done\033[0;0m"

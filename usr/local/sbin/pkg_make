@@ -1,0 +1,48 @@
+#!/bin/bash
+e='echo -e'
+b=`basename $0`
+
+fail_exit() {
+  $e "$1"
+  exit 1
+}
+
+if [ -r /etc/pkgman.conf ]; then
+  . /etc/pkgman.conf
+else
+  fail_exit "${b}:  configuration file /etc/pkgman.conf not readable, exit!"
+fi
+
+if [ ! $1 ]; then
+  $e "\033[1;33mUsage:\033[0;0m $b PKGNAME [&]
+
+where,
+  PKGNAME = package name and version (example \"bash-4.3\")
+  & = set to background mode
+
+  Usage $b in directory with package's files (e.g.
+  installed after \"make install DESTDIR=\`pwd\`/PKG\")
+
+  Archive format are .txz
+
+Allow variables:
+  PKG_C = cache dir for output package (default \"$PKG_C\")
+  PKG_A = architecture suffix (default \"$PKG_A\")
+
+-----------------------------------------
+Simple package maker for (B)LFS GNU/Linux
+* $b provided without implied warranty"
+  exit 1
+fi
+
+if [ ! -r "$PKG_C" ] ; then
+  mkdir -p "$PKG_C" || fail_exit \
+   "${b}:  no access for creating directory \"$PKG_C\", exit!"
+elif [ ! -w "$PKG_C" ] ; then
+  fail_exit "${b}:  no write access for output directory \"$PKG_C\", exit!"
+fi
+
+$e -n "${b}:  creating package $PKG_C/${1}-${PKG_A}.pkg.txz ..."
+tar cfJ $PKG_C/${1}-${PKG_A}.pkg.txz * 2>/dev/null || fail_exit \
+ "${b}:  tar failed, exit!"
+$e "\033[1;32m done\033[0;0m"

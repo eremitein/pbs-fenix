@@ -1,0 +1,27 @@
+#!/bin/bash
+echo -en "pkg_clean:  cleaning package ..."
+(
+#chown -R root:root .
+#find . -type f -exec chmod a+r,u+w {} \; #conflict w/ SUID-bit!
+find . -type d -exec chmod 755 {} \;
+
+find . -iname \*.a | xargs strip --strip-debug
+find .  | xargs file | grep -e "executable" -e "shared object" | grep ELF \
+  | cut -f 1 -d : | xargs strip --strip-unneeded
+
+if [ -d usr/info ] || [ -d usr/man ] || [ -d usr/doc ]; then
+  mkdir -p usr/share
+  mv usr/{info,man,doc} usr/share
+fi
+
+find usr/share/man -type f -exec gzip -9 {} \;
+
+for i in $(find usr/share/man -type l) ; do
+  ln -s $( readlink $i ).gz $i.gz
+  rm $i
+done
+
+rm -f usr/share/info/dir
+gzip -9 usr/share/info/*
+) &> /dev/null
+echo -e "\033[1;32m done\033[0;0m"

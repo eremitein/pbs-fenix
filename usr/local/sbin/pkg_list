@@ -1,0 +1,75 @@
+#!/bin/bash
+e='echo -e'
+b=`basename $0`
+
+fail_exit() {
+  $e "$1"
+  exit 1
+}
+
+if [ -r /etc/pkgman.conf ]; then
+  . /etc/pkgman.conf
+else
+  fail_exit "${b}:  configuration file /etc/pkgman.conf not readable, exit!"
+fi
+
+if [ ! $1 ]; then
+  $e "\033[1;33mUsage:\033[0;0m $b [-a] [-c] [regex]
+
+where,
+  -a = show all installed packages (in input packages directory)
+       [Note] if that option set, another not allow
+  -c = show content of matched package
+  regex = search request for matching package's name,
+  which created with \"_pkg_make\" and stored in input packages directory
+
+Allow variable:
+  PKG_I = directory with stored package's in-files (default \"$PKG_I\")
+
+--------------------------------------------------
+Package's content shower/finder for (B)LFS systems
+* $b provided without implied warranty"
+  exit 1
+fi
+
+while getopts ":ac" op
+do
+  case $op in
+    a) all_pkg="1" ;;
+    c) content="1" ;;
+    *) fail_exit "${b}:  option \"${OPTARG}\" not allowed, exit!" ;;
+ esac
+done
+shift $(($OPTIND - 1))
+
+if [ "$all_pkg" ]; then
+  ls -1 $PKG_I
+else
+  if [ ! "$1" ]; then
+    fail_exit "${b}:  using \"-c\" only with regex search, exit!"
+  fi
+
+  for qp in "$@" ; do
+    PNM="`find $PKG_I -iname \*${qp}\* ! -iname \*.log\* ! -iname \*.in ! -iname \*.out`"
+    MTALL+=($PNM)
+
+    if [ ! "$PNM" ]; then
+      $e "${b}:  nothing find for criteria \"$qp\""
+    else
+      for p in $PNM ; do
+        if [ "$content" ]; then
+          $e "\033[1;33mpackage `basename $p` content:\033[0;0m"
+          cat $p
+          $e
+        fi
+      done
+    fi
+  done
+  
+  if [ ${MTALL} ]; then
+    $e "\033[1;33mall matched package(s):\033[0;0m"
+    for otps in "${MTALL[@]}" ; do
+      $e "$otps\r"
+    done
+  fi
+fi

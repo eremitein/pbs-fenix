@@ -1,0 +1,122 @@
+#!/bin/bash
+e='echo -e'
+b=`basename $0`
+ROOT_DIR=${ROOT_DIR:-/}
+
+fail_exit() {
+  $e "$1"
+  exit 1
+}
+
+if [ -r /etc/pkgman.conf ]; then
+  . /etc/pkgman.conf
+else
+  fail_exit "${b}:  configuration file /etc/pkgman.conf not readable, exit!"
+fi
+
+TRGT="${ROOT_DIR}${PKG_I}"
+
+if [ ! $1 ]; then
+  $e "\033[1;33mUsage: $b PKGINFILE_old PKG_new [v] [-]\033[0;0m
+
+where,
+  PKGINFILE_old = file with list of installed files in form \"find .\"
+                  (e.g. installed with \"pkg_in\")
+  PKG_new = archive, created with \"pkg_make\" 
+  v = show only diffirents, not really change anything
+  [TODO]
+  - = read content from stdin (usefully with netcat).
+
+Allow variables:
+  PKG_I = directory, where storing installed package's info (default \"$PKG_I\")
+  PKG_O = directory, where storing removed package's info (default \"$PKG_O\")
+  ROOT_DIR = target directory for installing files (default is \"$ROOT_DIR\")
+
+----------------------------------------------
+Simple package installer for (B)LFS systems
+* $b provided without implied warranty"
+  exit 1
+fi
+
+if [ ! -r "$TRGT" ] ; then
+  mkdir -p "$TRGT" || fail_exit \
+   "${b}:  no access for creating directory \"$TRGT\", exit!"
+elif [ ! -w "$TRGT" ] ; then
+  fail_exit "${b}:  no write access for target directory \"$TRGT\", exit!"
+fi  
+
+if [ ! -r "$1" ] || [ ! -r "$2" ] ; then
+  fail_exit "${b}:  not found one (or both) input file, exit!"
+else
+  L=`basename "$2" |sed -e 's/$*\.pkg\.t.z//'`
+  L2=`basename "$1"`
+
+  if [ "$L" = "$L2" ] ; then
+    fail_exit "${b}:  using same names for packages not allowed, exit!"
+  fi
+
+  if [ "$3" ] && [ "$3" = "v" ] ; then
+    new_lst_tmp=`mktemp --suffix=-pkg_update`
+    tar tf $2 | sort > "$new_lst_tmp"
+    $e -n "\033[1;33mdifferent files:\033[0;0m "
+    diff_lst=`comm -23 "$1" "$new_lst_tmp"`
+    if [ "$diff_lst" ]; then
+      $e "\n${diff_lst}"
+    else
+      $e " no"
+    fi
+    rm "$new_lst_tmp"
+    exit 0
+  fi
+
+  if [ -f ${1}.out ]; then
+    mv -f ${1}.out "$ROOT_DIR"/"$PKG_O" &>/dev/null || fail_exit \
+     "${b}:  cannot save .out script (permission denied?), exit!"
+  fi
+  if [ -f ${1}.in ]; then
+    mv -f ${1}.in "$ROOT_DIR"/"$PKG_O" &>/dev/null || fail_exit \
+     "${b}:  cannot save .in script (permission denied?), exit!"
+  fi
+
+  if [ -f ${1}*.log.* ]; then
+    mv -f ${1}*.log.* "$ROOT_DIR"/"$PKG_O" &>/dev/null
+  fi
+
+  $e -n "${b}:  installing ${L} ..."
+  tar xvf $2 -C "$ROOT_DIR" 2>/dev/null | sort 2>/dev/null > $TRGT/$L || fail_exit \
+   "\n${b}:  tar failed, exit!"
+
+  $e -n " cleaning up ..."
+  comm -23 "$1" $TRGT/$L > $TRGT/${L}.diff || fail_exit "${b}:  comm aborted, exit!"
+  p_lst="$(< $TRGT/${L}.diff)"
+  for target in $p_lst; do
+    if [ ! -d "$target" ] || [ -L "$target" ]; then
+      rm -f "$target" &>/dev/null
+    fi
+  done
+  for target in $p_lst; do
+    if [ -d "$target" ]; then
+      rmdir -p "$target" &>/dev/null
+    fi
+  done
+  rm -f $TRGT/${L}.diff
+  mv -f "$1" "$ROOT_DIR"/"$PKG_O" &>/dev/null || fail_exit \
+     "\n${b}:  cannot save PKGINFILE (permission denied?), exit!"
+  $e "\033[1;32m done\033[0;0m"
+
+  if [ -f "$ROOT_DIR"/"$PKG_O"/${L2}.out ]; then
+    pushd "$ROOT_DIR" &>/dev/null
+    sh "$ROOT_DIR"/"$PKG_O"/${L2}.out
+    popd  &>/dev/null
+  fi
+
+  if [ -f "$TRGT"/${L}.in ]; then
+    if [ "$ROOT_DIR" = "/" ]; then
+      pushd "$ROOT_DIR" &>/dev/null
+      sh "$TRGT"/${L}.in
+      popd &>/dev/null
+    else
+      $e "\n${b}:  ${L}.in not executed in non-native root target, skip"
+    fi
+  fi
+fi

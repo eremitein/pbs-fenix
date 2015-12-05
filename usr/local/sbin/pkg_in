@@ -1,0 +1,65 @@
+#!/bin/bash
+e='echo -e'
+b=`basename $0`
+ROOT_DIR=${ROOT_DIR:-/}
+
+fail_exit() {
+  $e "$1"
+  exit 1
+}
+
+if [ -r /etc/pkgman.conf ]; then
+  . /etc/pkgman.conf
+else
+  fail_exit "${b}:  configuration file /etc/pkgman.conf not readable, exit!"
+fi
+
+TRGT="${ROOT_DIR}${PKG_I}"
+
+if [ ! $1 ]; then
+  $e "\033[1;33mUsage: $b PKG [PKG2...] [-]\033[0;0m
+
+where,
+  PKG = archive(s), created with \"pkg_make\"
+  [TODO]
+  - = read content from stdin (usefully with netcat).
+
+Allow variables:
+  PKG_I = directory, where storing installed package's info (default \"$PKG_I\")
+  ROOT_DIR = target directory for installing files (default is \"$ROOT_DIR\")
+
+-------------------------------------------
+Simple package installer for (B)LFS systems
+* $b provided without implied warranty"
+  exit 1
+fi
+
+if [ ! -r "$TRGT" ] ; then
+  mkdir -p "$TRGT" || fail_exit \
+   "${b}:  no access for creating directory \"$TRGT\", exit!"
+elif [ ! -w "$TRGT" ] ; then
+  fail_exit "${b}:  no write access for target directory \"$TRGT\", exit!"
+fi
+
+for p in "$@" ; do
+  if [ ! -r "$p" ] ; then
+    $e "${b}:  not found \"$p\", skip"
+  else
+    L=`basename "$p" |sed -e 's/$*\.pkg\.t.z//'`
+
+    $e -n "${b}:  installing ${L} ..."
+    tar xvf $p -C "$ROOT_DIR" 2>/dev/null | sort 2>/dev/null > $TRGT/$L || fail_exit \
+     "\n${b}:  tar failed, exit!"
+    $e "\033[1;32m done\033[0;0m"
+
+    if [ -f "$TRGT/${L}.in" ]; then
+      if [ "$ROOT_DIR" = "/" ]; then
+        pushd "$ROOT_DIR" &>/dev/null
+        sh "$TRGT/${L}.in"
+        popd &>/dev/null
+      else
+        $e "\n${b}:  ${L}.in not executed in non-native root target, skip"
+      fi
+    fi
+  fi
+done
