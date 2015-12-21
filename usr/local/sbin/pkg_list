@@ -21,7 +21,7 @@ where,
        [Note] if that option set, another not allow
   -c = show content of matched package
   regex = search request for matching package's name,
-  which created with \"_pkg_make\" and stored in input packages directory
+  which created with \"pkg_make\" and stored in input packages directory
 
 Allow variable:
   PKG_I = directory with stored package's in-files (default \"$PKG_I\")
